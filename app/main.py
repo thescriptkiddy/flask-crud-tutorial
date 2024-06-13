@@ -1,11 +1,10 @@
+import random
 import uuid
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+import app
+from flask import Flask, jsonify
+from app.extensions import db
 from uuid import UUID, uuid4
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///example.db'
-db = SQLAlchemy(app)
+from test_data import random_names, random_cities
 
 
 # Define the User model
@@ -52,11 +51,11 @@ def read_records(model, *identifier):
             return None
 
 
-def update_record(model, identifier, **kwargs):
+def update_records(model, identifier, **kwargs):
     """Updates an database object"""
     try:
         print(f"Updating record id: {identifier} with data: {kwargs}")
-        record = db.get_or_404(model, identifier)
+        record = db.get_or_404(model, uuid.UUID(identifier))
         if record:
             for key, value in kwargs.items():
                 setattr(record, key, value)
@@ -70,7 +69,7 @@ def update_record(model, identifier, **kwargs):
 def delete_record(model, identifier):
     """Deletes an database object"""
     print(f"Deleting record id: {identifier}")
-    result = db.session.execute(db.select(model).where(model.id == identifier))
+    result = db.session.execute(db.select(model).where(model.id == uuid.UUID(identifier)))
     record = result.scalar_one_or_none()
     if record:
         db.session.delete(record)
@@ -123,12 +122,30 @@ def create_new_post(**kwargs):
     return jsonify(post.id), 201
 
 
-def get_posts():
-    # TODO Refactor to use read_records with identifier. See get_users function
-    posts = read_records(Post)
-    for post in posts:
-        print(post.title)
-        print(post.id)
+def get_posts(*identifier):
+    """Returns all post object or specific posts if optional identifiers(post_id) have been passed"""
+    try:
+        if identifier:
+            if len(identifier) == 1:
+                post = read_records(Post, uuid.UUID(identifier[0]))
+                print(f"Post from get_posts: {post.title}")
+                return post
+            else:
+                posts = [read_records(Post, uuid.UUID(id)) for id in identifier]
+                print(f"List of posts {posts}")
+                for post in posts:
+                    print(f"Post titles from get_posts {post.title}")
+                return posts
+        else:
+            posts = read_records(Post)
+            print(posts)
+            # TODO Need to check how I return all posts as json data
+            all_posts = [post for post in posts]
+            print(all_posts)
+
+            return all_posts
+    except Exception as err:
+        print(f"An error occurred: {err}")
 
 
 def delete_post_by_id(identifier):
@@ -136,23 +153,22 @@ def delete_post_by_id(identifier):
     return post_to_be_deleted
 
 
-# Ensure the database is created within the app context
-with app.app_context():
-    db.create_all()
+# Testing
+def generate_random_posts():
+    for _ in range(0, 10):
+        random_number = random.randint(0, 1000)
+        new_post = create_new_post(id=uuid4(),
+                                   title=f"My new Title+{random_number}",
+                                   body=f"My body text+{random_number}")
 
-    # create_new_user(
-    #     id=uuid4(),
-    #     name="Simon",
-    #     age=20,
-    #     city="Hamburg",)
+        print(new_post)
 
-    # get_user_by_id(identifier=uuid.UUID("722be9292cb24e179820914e96b2f2d2"))
-    # update_record(User, identifier=uuid.UUID("722be9292cb24e179820914e96b2f2d2"), age=80, city="Hamburg")
-    # delete_user_by_id(identifier=uuid.UUID("7100ee8921d146f2b49a0fe802a66d37"))
 
-    # get_post_by_id(identifier=uuid.UUID("f0b9f2f074c948dca0f5bb1ee9a69c7c"))
-    # delete_post_by_id(identifier=uuid.UUID("f0b9f2f074c948dca0f5bb1ee9a69c7c"))
-
-    # read_records(User, uuid.UUID("b586eba81d394d86ac3e1d9935441e2a"))
-    # get_users("669fb14a4513418388b7cc22ed47187e")
-    # get_posts()
+def generate_random_user():
+    for _ in range(0, 10):
+        random_number = random.randint(1, 99)
+        new_user = create_new_user(id=uuid4(),
+                                   name=random.choice(random_names),
+                                   age=random_number,
+                                   city=random.choice(random_cities))
+        print(new_user)
